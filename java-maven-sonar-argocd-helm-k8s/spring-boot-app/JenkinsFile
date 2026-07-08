@@ -19,37 +19,35 @@ pipeline {
       }
     }
     stage('Static Code Analysis') {
-      environment {
-        SONAR_URL = "http://13.60.169.191:9000"
-      }
-      steps {
-        withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
-          sh '''
-            set -e
-            echo "==== Current Java (before switch) ===="
-            java -version
+  environment {
+    SONAR_URL = "http://13.60.169.191:9000"
+  }
+  steps {
+    withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
+      sh '''
+        set -e
+        echo "==== Before switch ===="
+        java -version
 
-            # Download a portable JDK 17 (Eclipse Temurin) if not already present
-            if [ ! -d /opt/jdk-17 ]; then
-              echo "Downloading JDK 17..."
-              mkdir -p /opt/jdk-17
-              curl -sL -o /tmp/jdk17.tar.gz \
-                https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.9%2B9/OpenJDK17U-jdk_x64_linux_hotspot_17.0.9_9.tar.gz
-              tar -xzf /tmp/jdk17.tar.gz -C /opt/jdk-17 --strip-components=1
-            fi
+        if [ ! -d /opt/jdk-17 ]; then
+          mkdir -p /opt/jdk-17
+          curl -sL -o /tmp/jdk17.tar.gz \
+            https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.9%2B9/OpenJDK17U-jdk_x64_linux_hotspot_17.0.9_9.tar.gz
+          tar -xzf /tmp/jdk17.tar.gz -C /opt/jdk-17 --strip-components=1
+        fi
 
-            export JAVA_HOME=/opt/jdk-17
-            export PATH=$JAVA_HOME/bin:$PATH
+        export JAVA_HOME=/opt/jdk-17
+        export PATH=$JAVA_HOME/bin:$PATH
 
-            echo "==== Java after switch ===="
-            java -version
+        echo "==== After switch ===="
+        java -version
 
-            cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
-            mvn sonar:sonar -Dsonar.login=$SONAR_AUTH_TOKEN -Dsonar.host.url=${SONAR_URL}
-          '''
-        }
-      }
+        cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
+        mvn sonar:sonar -Dsonar.login=$SONAR_AUTH_TOKEN -Dsonar.host.url=${SONAR_URL}
+      '''
     }
+  }
+}
     stage('Build and Push Docker Image') {
       environment {
         DOCKER_IMAGE = "salmanmohd4668/ultimate-cicd:${BUILD_NUMBER}"
