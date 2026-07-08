@@ -19,19 +19,21 @@ pipeline {
       }
     }
     stage('Static Code Analysis') {
-      agent {
-        docker {
-          image 'maven:3.9-eclipse-temurin-17'   // JDK 17 - required by SonarQube 10.x scanner
-          args '--user root'
-          reuseNode true                          // keeps the same workspace checked out by the outer agent
-        }
-      }
       environment {
         SONAR_URL = "http://13.60.169.191:9000"
       }
       steps {
         withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
           sh '''
+            # Install JDK 17 for this stage only (SonarQube 10.x scanner requires Java 17+)
+            apt-get update -qq && apt-get install -y -qq openjdk-17-jdk > /dev/null
+
+            JAVA17_HOME=$(dirname $(dirname $(readlink -f $(which java))))
+            export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+            export PATH=$JAVA_HOME/bin:$PATH
+
+            java -version
+
             cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
             mvn sonar:sonar -Dsonar.login=$SONAR_AUTH_TOKEN -Dsonar.host.url=${SONAR_URL}
           '''
