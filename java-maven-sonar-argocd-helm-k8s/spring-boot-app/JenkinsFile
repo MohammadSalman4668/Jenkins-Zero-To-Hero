@@ -7,74 +7,107 @@ pipeline {
         }
     }
 
+
     environment {
+
         DOCKER_IMAGE = "salmanmohd4668/ultimate-cicd"
         IMAGE_TAG = "${BUILD_NUMBER}"
+
         SONARQUBE_SERVER = "sonarqube"
+
     }
 
+
     stages {
+
 
         stage('Checkout') {
             steps {
                 echo "Checking out source code..."
+
                 checkout scm
             }
         }
 
+
+
         stage('Verify Environment') {
             steps {
                 sh '''
-                    echo "Checking Java Version"
-                    java -version
+                echo "Checking Java Version"
+                java -version
 
-                    echo "Checking Maven Version"
-                    mvn -version
+                echo "Checking Maven Version"
+                mvn -version
 
-                    echo "Checking Docker"
-                    docker --version
+                echo "Checking Docker"
+                docker --version
                 '''
             }
         }
+
+
 
         stage('Build Application') {
             steps {
                 echo "Building Spring Boot Application..."
 
                 sh '''
-                    cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
+                cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
 
-                    mvn clean package -DskipTests
+                mvn clean package -DskipTests
                 '''
             }
         }
 
+
+
         stage('SonarQube Analysis') {
+
             steps {
+
                 withSonarQubeEnv("${SONARQUBE_SERVER}") {
 
                     sh '''
-                        cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
 
-                        mvn sonar:sonar \
-                        -Dsonar.projectKey=com.abhishek:spring-boot-demo \
-                        -Dsonar.projectName=spring-boot-demo
+                    cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
+
+
+                    mvn sonar:sonar \
+                    -Dsonar.projectKey=com.abhishek:spring-boot-demo \
+                    -Dsonar.projectName=spring-boot-demo
+
                     '''
+
                 }
+
             }
         }
+
+
 
         stage('Quality Gate') {
+
             steps {
+
                 timeout(time: 5, unit: 'MINUTES') {
+
                     waitForQualityGate abortPipeline: true
+
                 }
+
             }
         }
 
+
+
+
         stage('Build and Push Docker Image') {
+
             steps {
+
                 script {
+
 
                     withCredentials([
                         usernamePassword(
@@ -84,89 +117,137 @@ pipeline {
                         )
                     ]) {
 
+
                         sh '''
-                            cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
 
-                            docker build -t ${DOCKER_IMAGE}:${IMAGE_TAG} .
+                        cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
 
-                            echo $DOCKER_PASSWORD | docker login \
-                                -u $DOCKER_USER \
-                                --password-stdin
 
-                            docker push ${DOCKER_IMAGE}:${IMAGE_TAG}
+                        docker build \
+                        -t ${DOCKER_IMAGE}:${IMAGE_TAG} .
+
+
+                        echo $DOCKER_PASSWORD | docker login \
+                        -u $DOCKER_USER \
+                        --password-stdin
+
+
+                        docker push ${DOCKER_IMAGE}:${IMAGE_TAG}
+
+
                         '''
+
                     }
+
                 }
+
             }
+
         }
 
+
+
+
         stage('Update Deployment File') {
+
+
             steps {
+
+
                 script {
 
+
                     withCredentials([
+
                         string(
                             credentialsId: 'github-token',
                             variable: 'GITHUB_TOKEN'
                         )
+
                     ]) {
 
+
+
                         sh '''
-                            echo "Updating Kubernetes deployment image..."
 
-                            # Move into the Git repository
-                            cd java-maven-sonar-argocd-helm-k8s
+                        echo "Updating Kubernetes deployment image..."
 
-                            # Mark repository as safe
-                            git config --global --add safe.directory "$(pwd)"
 
-                            # Debug information
-                            pwd
-                            ls -la
-                            git rev-parse --show-toplevel
-                            git status
+                        cd java-maven-sonar-argocd-helm-k8s
 
-                            # Configure Git identity
-                            git config user.email "salman.mohd4668@gmail.com"
-                            git config user.name "Mohammad Salman"
 
-                            # Update deployment image
-                            sed -i "s|image:.*|image: ${DOCKER_IMAGE}:${IMAGE_TAG}|g" deployment.yaml
 
-                            # Commit only if there are changes
-                            git add deployment.yaml
-                            git commit -m "Update image tag to ${IMAGE_TAG}" || echo "No changes to commit"
+                        git config user.email "salman.mohd4668@gmail.com"
 
-                            # Push changes
-                            git push https://${GITHUB_TOKEN}@github.com/MohammadSalman4668/Jenkins-Zero-To-Hero.git main
+                        git config user.name "Mohammad Salman"
+
+
+
+                        sed -i "s|image:.*|image: ${DOCKER_IMAGE}:${IMAGE_TAG}|g" deployment.yaml
+
+
+
+                        git add deployment.yaml
+
+
+
+                        git commit -m "Update image tag to ${IMAGE_TAG}"
+
+
+
+                        git push https://${GITHUB_TOKEN}@github.com/MohammadSalman4668/Jenkins-Zero-To-Hero.git main
+
+
+
                         '''
+
                     }
+
                 }
+
             }
+
         }
+
+
     }
+
+
+
 
     post {
 
+
         success {
+
             echo '''
-====================================
- Pipeline Completed Successfully
-====================================
-'''
+            ====================================
+             Pipeline Completed Successfully
+            ====================================
+            '''
+
         }
+
+
 
         failure {
+
             echo '''
-====================================
- Pipeline Failed
- Check Logs
-====================================
-'''
+            ====================================
+             Pipeline Failed
+             Check Logs
+            ====================================
+            '''
+
         }
 
+
         always {
+
             cleanWs()
+
         }
+
     }
+
 }
