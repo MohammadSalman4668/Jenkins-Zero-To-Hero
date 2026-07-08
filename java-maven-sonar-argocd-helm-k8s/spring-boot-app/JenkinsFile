@@ -9,7 +9,13 @@ pipeline {
 
 
     environment {
-        SONAR_URL = "http://YOUR_SONAR_SERVER_IP:9000"
+
+        SONAR_HOME = tool 'SonarQubeScanner'
+
+        SONAR_TOKEN = credentials('sonar-token')
+
+        DOCKER_IMAGE = 'salmanmohd4668/spring-boot-demo'
+
     }
 
 
@@ -18,65 +24,71 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                echo "Checking out source code..."
 
-                git branch: 'main',
-                    url: 'YOUR_GITHUB_REPOSITORY_URL'
+                echo 'Checking out source code...'
+
+                // Jenkins already checked out Jenkinsfile
+                // No need for another git checkout
+
+                sh 'ls -la'
+
             }
         }
+
 
 
         stage('Verify Environment') {
+
             steps {
+
                 sh '''
-                    echo "========== Java Version =========="
+                    echo "Java Version:"
                     java -version
 
-                    echo "========== Maven Version =========="
+                    echo "Maven Version:"
                     mvn -version
 
-                    echo "========== Docker Version =========="
+                    echo "Docker Version:"
                     docker --version
                 '''
+
             }
         }
+
 
 
         stage('Build Application') {
+
             steps {
+
                 sh '''
-                    cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
-
-                    echo "Building Spring Boot Application..."
-
                     mvn clean package -DskipTests
                 '''
+
             }
         }
+
 
 
         stage('SonarQube Analysis') {
+
             steps {
 
-                withCredentials([
-                    string(
-                        credentialsId: 'sonar-token',
-                        variable: 'SONAR_AUTH_TOKEN'
-                    )
-                ]) {
+                withSonarQubeEnv('SonarQube') {
 
                     sh '''
-                        cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
-
-                        echo "Running SonarQube Analysis..."
-
-                        mvn sonar:sonar \
-                        -Dsonar.login=$SONAR_AUTH_TOKEN \
-                        -Dsonar.host.url=$SONAR_URL
+                    mvn sonar:sonar \
+                    -Dsonar.projectKey=spring-boot-demo \
+                    -Dsonar.host.url=http://YOUR_SONARQUBE_IP:9000 \
+                    -Dsonar.token=$SONAR_TOKEN
                     '''
+
                 }
+
             }
+
         }
+
 
 
         stage('Quality Gate') {
@@ -94,20 +106,19 @@ pipeline {
         }
 
 
+
         stage('Docker Build') {
 
             steps {
 
                 sh '''
-                    cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
-
-                    echo "Building Docker Image..."
-
-                    docker build \
-                    -t spring-boot-demo:latest .
+                    docker build -t $DOCKER_IMAGE:$BUILD_NUMBER .
                 '''
+
             }
+
         }
+
 
 
         stage('Docker Image Check') {
@@ -117,37 +128,43 @@ pipeline {
                 sh '''
                     docker images | grep spring-boot-demo
                 '''
+
             }
+
         }
 
 
     }
 
 
+
     post {
+
 
         success {
 
-            echo "===================================="
-            echo " Pipeline Completed Successfully "
-            echo "===================================="
+            echo '''
+            ================================
+             Pipeline Completed Successfully
+            ================================
+            '''
 
         }
 
 
         failure {
 
-            echo "===================================="
-            echo " Pipeline Failed "
-            echo " Check Logs "
-            echo "===================================="
+            echo '''
+            ================================
+             Pipeline Failed
+             Check Logs
+            ================================
+            '''
 
         }
 
 
         always {
-
-            echo "Cleaning workspace..."
 
             cleanWs()
 
